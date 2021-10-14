@@ -26,7 +26,7 @@ def prepare_df(
     if need_y_null is False:
         p_df.drop(("count", "No Answer"), axis=1, inplace=True)
     if need_total:
-        p_df = p_df.append(p_df.sum().rename("total"))
+        p_df = p_df.append(p_df.sum().rename("Total"))
         # p_df.sum().rename("total").append(p_df)
         # p_df[-1] = p_df.sum().rename('total')
         # p_df.index = p_df.index + 1  # shifting index
@@ -39,10 +39,12 @@ def add_text_in_bar(
     ax: mpl.axes.Axes,
     f_size: tuple,
     p_df: pd.DataFrame,
-    dim_xs: List[Tuple[int, bool]],
+    # dim_xs: List[Tuple[int, bool]],
+    dim_y: int,
     interval: float,
     x_ticks_scale: float = 0.5,
     x_ticks_displacement: float = 2,
+    set_location: list = None,
 ) -> Tuple[list, mpl.axes.Axes]:
     """
     add the percentage and other text content into each bar.
@@ -56,10 +58,15 @@ def add_text_in_bar(
     for i, (_, col) in enumerate(p_df.iteritems()):
         c_data.append(np.asarray(col) / np.asarray(r_sum))
     r = len(col)
+    # print(i, r)
     data = np.asarray(c_data).flatten()
 
     accumu_height = list()
     # intra_interval = 0
+    if set_location:
+        locator_list = set_location * dim_y
+
+    # print(np.asarray(ax.get_xlim()))
     for i, p in enumerate(ax.patches):
         # patch x range [-0.5*width, num_bar*1-0.5*width]
         # x coordinate(left down corner): [-0.5*w, -0.5*w+1, -0.5*w+2, ..., num_bar*1-0.5*width]
@@ -71,17 +78,28 @@ def add_text_in_bar(
         #     if p.get_x() == dim_x-1-p.get_width()/2:
         #         p.set_x(p.get_x()+0.7)#set_intra_interval
 
-        if p.get_x() > dim_xs[0][0] - 1 - p.get_width() / 2:
-            p.set_x(p.get_x() + interval)
-            # if dim_xs[0][1]:
-            #     intra_interval = 0.7
+        if set_location:
+            p.set_x(
+                locator_list[i] * x_ticks_scale
+                + x_ticks_displacement
+                - p.get_width() / 2
+            )
+        else:
+            p.set_x(
+                (p.get_x() + p.get_width() / 2) * x_ticks_scale
+                + x_ticks_displacement
+                - p.get_width() / 2
+            )
 
-        p.set_x(
-            (p.get_x() + p.get_width() / 2) * x_ticks_scale
-            + x_ticks_displacement
-            - p.get_width() / 2
-        )
-        # print(p.get_x(), p.get_width())
+        # if p.get_x() > dim_xs[0][0] - 1 - p.get_width() / 2:
+        #     p.set_x(p.get_x() + interval)
+
+        # p.set_x(
+        #     (p.get_x() + p.get_width() / 2) * x_ticks_scale
+        #     + x_ticks_displacement
+        #     - p.get_width() / 2
+        # )
+
         h.append(p.get_height())
         if i < r:
             accumu_height.append(p.get_height())
@@ -90,7 +108,7 @@ def add_text_in_bar(
             accumu_height, height = text_height(h, i, r, accumu_height)
             ax.annotate(
                 percent,
-                (p.get_x() + p.get_width() * 0.3, p.get_y() + p.get_height() * 0.4),
+                (p.get_x() + p.get_width() * 0.1, p.get_y() + p.get_height() * 0.4),
                 fontsize=f_size[0] * 0.9,
                 fontweight="heavy",
                 color="white",
@@ -115,7 +133,7 @@ def text_height(
 
 
 def bar_plot_settings(
-    fig: mpl.figure.Figure,
+    # fig: mpl.figure.Figure,
     ax: mpl.axes.Axes,
     f_size: tuple,
     dim_xs: List[Tuple[int, bool]],
@@ -131,6 +149,7 @@ def bar_plot_settings(
     x_ticks_scale: float = 0.5,
     x_ticks_displacement: float = 2,
     num_plots: int = 1,
+    set_location: list = None,
 ) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
     """
     some figure settings in simple bar plot.
@@ -160,10 +179,14 @@ def bar_plot_settings(
     #         locator_list = [i if i<dim_x[0] else i+0.5 for i in list(ax.get_xticks())]
     # x ticks (center of patch)coordinate: [0, 1, 2, ..., num_bar*1]
     # print(ax.get_xticks())
-    locator_list = [
-        i if i < dim_xs[0][0] else i + interval for i in list(ax.get_xticks())
-    ]
+    # locator_list = [
+    #     i if i < dim_xs[0][0] else i + interval for i in list(ax.get_xticks())
+    # ]
 
+    if set_location:
+        locator_list = set_location
+    else:
+        locator_list = ax.get_xticks()
     ax.xaxis.set_major_locator(
         ticker.FixedLocator(
             np.asarray(locator_list) * x_ticks_scale + x_ticks_displacement
@@ -237,7 +260,7 @@ def bar_plot_settings(
     # fig.autofmt_xdate()
     # if save_fig:
     #     fig.savefig(save_fig)
-    return fig, ax
+    return ax
 
 
 def set_ticklabels(labels: list, r_sum: int) -> List[str]:
@@ -363,14 +386,23 @@ def multi_bar_to_one_compare(
     fig_size: tuple = (10, 5),
     x_ticks_displacement: float = 1,
     x_ticks_scale: float = 0.5,
+    set_location: list = None,
 ) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
     fig, ax = plt.subplots(figsize=fig_size)
+    # plt.style.use("seaborn")
     dim_xs, dim_y, recast_df = recast_multi_to_one(filepath, col_xs, col_ys)
+
+    if set_location:
+        if len(set_location) != sum([i for i, _ in dim_xs]):
+            raise Exception(
+                f"Laushir, the num of bars ({sum([i for i, _ in dim_xs])}) are not match with \
+                the num of location ({len(set_location)}) you give. Na hwedron."
+            )
 
     if color is not None and len(color) != dim_y:
         raise Exception(
-            f"laushir, there need {dim_y} kinds of colors to make it as a color map list,\
-                 you dra only gives {len(color)} colors, na hwedron."
+            f"Laushir, there need ({dim_y}) kinds of colors to make it as a color map list,\
+            you dra only gives ({len(color)}) colors."
         )
     ax = percent_from_list_to_df(recast_df).plot.bar(
         ax=ax, stacked=True, width=0.03 * fig_size[0], color=color
@@ -380,14 +412,15 @@ def multi_bar_to_one_compare(
         ax,
         fig_size,
         recast_df,
-        dim_xs,
+        dim_y=dim_y,
         interval=interval,
+        set_location=set_location,
         x_ticks_displacement=x_ticks_displacement,
         x_ticks_scale=x_ticks_scale,
     )
 
     bar_plot_settings(
-        fig,
+        # fig,
         ax,
         f_size=fig_size,
         title=give_title,
@@ -397,13 +430,14 @@ def multi_bar_to_one_compare(
         interval=interval,
         x_ticks_displacement=x_ticks_displacement,
         x_ticks_scale=x_ticks_scale,
+        set_location=set_location
         # save_fig=save_figure)
         # legend_col=int(len(p_df.columns))
     )
     # very good explain of how to share legend
     # refer to:
     # https://stackoverflow.com/questions/9834452/how-do-i-make-a-single-legend-for-many-subplots-with-matplotlib
-    anchor = (0.5, 0.82)
+    # anchor = (0.5, 0.82)
     # dim_y = len(p_df.columns)
     # tuple_labels = [ax.get_legend_handles_labels() for ax in axs]
     # tuple_labels = ax.get_legend_handles_labels()
@@ -412,6 +446,7 @@ def multi_bar_to_one_compare(
     # for name in leg_labels:
     #     new_leg_labels.append(name)
     # print()
+    anchor = (0.5, 0.9)
     handles, leg_labels = ax.get_legend_handles_labels()
     new_leg_labels = list()
     for name in leg_labels:
@@ -431,7 +466,7 @@ def multi_bar_to_one_compare(
         columnspacing=1,
         # prop={'legend.labelspacing':0.25}
     )
-    fig.suptitle("she woa dra niaou", x=0.5, y=1, fontsize=fig_size[0] * 2)
+    # fig.suptitle("she woa dra niaou", x=0.5, y=1, fontsize=fig_size[0] * 2)
     fig.tight_layout(pad=1.2)
     fig.autofmt_xdate()
     fig.savefig(save_figure)
@@ -515,17 +550,20 @@ def multi_bar_compare(
 if __name__ == "__main__":
     multi_bar_to_one_compare(
         "../data_set/test_Oct08.csv",
-        [("B7", True, False), ("A00", True, False)],
+        [("B7", False, True), ("A00", False, False)],
         ("A6", True),
-        save_figure="../playground/tmp/multi_to_one.png",
+        save_figure="../playground/tmp/multi_to_one_4.png",
         give_title="laushir, bai leener, kutree zhe. dron !",
         legend_location="upper center",
+        set_location=[-0.5, 0.5, 2, 3.5, 4.5],
         color=[
             "royalblue",
             "steelblue",
             "cornflowerblue",
             "dodgerblue",
-            "deepskyblue",
-            "mediumslateblue",
+            "purple",
+            "slategrey",
+            # "deepskyblue",
+            # "darkmagenta",
         ],
     )
