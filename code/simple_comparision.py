@@ -2,12 +2,18 @@ from typing import List, Tuple
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
 
 
 def prepare_df(
-    file: str, col_x: str, col_y: str, need_total: bool = False
+    file: str,
+    col_x: str,
+    col_y: str,
+    need_total: bool = False,
+    need_x_null: bool = True,
+    need_y_null: bool = True,
 ) -> pd.DataFrame:
     """
     prepare a dataframe for column x vs. column y.
@@ -15,27 +21,67 @@ def prepare_df(
     df = pd.read_csv(file, usecols=[col_x, col_y]).fillna("No Answer")
     g_df = df.groupby([col_x, col_y]).size().reset_index(name="count")
     p_df = g_df.pivot(index=col_x, columns=col_y).fillna(0)
+    if need_x_null is False:
+        p_df.drop("No Answer", inplace=True)
+    if need_y_null is False:
+        p_df.drop(("count", "No Answer"), axis=1, inplace=True)
     if need_total:
         p_df = p_df.append(p_df.sum().rename("total"))
+        # p_df.sum().rename("total").append(p_df)
+        # p_df[-1] = p_df.sum().rename('total')
+        # p_df.index = p_df.index + 1  # shifting index
+        # p_df.sort_index(inplace=True)
+
     return p_df
 
 
 def add_text_in_bar(
-    ax: mpl.axes.Axes, f_size: tuple, p_df: pd.DataFrame
+    ax: mpl.axes.Axes,
+    f_size: tuple,
+    p_df: pd.DataFrame,
+    dim_xs: List[Tuple[int, bool]],
+    interval: float,
+    x_ticks_scale: float = 0.5,
+    x_ticks_displacement: float = 2,
 ) -> Tuple[list, mpl.axes.Axes]:
     """
     add the percentage and other text content into each bar.
     """
     data, r_sum, c_data, h = list(), list(), list(), list()
     for _, row in p_df.iterrows():
-        r_sum.append(sum(list(row)))
+        if sum(list(row)) == 0:
+            r_sum.append(0.00000001)
+        else:
+            r_sum.append(sum(list(row)))
     for i, (_, col) in enumerate(p_df.iteritems()):
         c_data.append(np.asarray(col) / np.asarray(r_sum))
     r = len(col)
     data = np.asarray(c_data).flatten()
 
     accumu_height = list()
+    # intra_interval = 0
     for i, p in enumerate(ax.patches):
+        # patch x range [-0.5*width, num_bar*1-0.5*width]
+        # x coordinate(left down corner): [-0.5*w, -0.5*w+1, -0.5*w+2, ..., num_bar*1-0.5*width]
+        # print(i, p.get_x(), p.get_width())
+        # for dim_x, need_tot in dim_xs:
+        # print(dim_x, need_tot)
+        # if need_tot:
+        #     # print(p.get_x(), dim_x-1-p.get_width()/2)
+        #     if p.get_x() == dim_x-1-p.get_width()/2:
+        #         p.set_x(p.get_x()+0.7)#set_intra_interval
+
+        if p.get_x() > dim_xs[0][0] - 1 - p.get_width() / 2:
+            p.set_x(p.get_x() + interval)
+            # if dim_xs[0][1]:
+            #     intra_interval = 0.7
+
+        p.set_x(
+            (p.get_x() + p.get_width() / 2) * x_ticks_scale
+            + x_ticks_displacement
+            - p.get_width() / 2
+        )
+        # print(p.get_x(), p.get_width())
         h.append(p.get_height())
         if i < r:
             accumu_height.append(p.get_height())
@@ -45,7 +91,7 @@ def add_text_in_bar(
             ax.annotate(
                 percent,
                 (p.get_x() + p.get_width() * 0.3, p.get_y() + p.get_height() * 0.4),
-                fontsize=f_size[0] * 0.8,
+                fontsize=f_size[0] * 0.9,
                 fontweight="heavy",
                 color="white",
             )
@@ -72,6 +118,8 @@ def bar_plot_settings(
     fig: mpl.figure.Figure,
     ax: mpl.axes.Axes,
     f_size: tuple,
+    dim_xs: List[Tuple[int, bool]],
+    interval: float,
     title: str = None,
     ylabel: str = None,
     xlabel: str = None,
@@ -80,6 +128,8 @@ def bar_plot_settings(
     save_fig: bool = False,
     no_frame: bool = True,
     row_sum: int = None,
+    x_ticks_scale: float = 0.5,
+    x_ticks_displacement: float = 2,
     num_plots: int = 1,
 ) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
     """
@@ -101,6 +151,24 @@ def bar_plot_settings(
 
     # ticks
     ax.tick_params(direction="out", labelsize=f_size[0] * 1.2)
+
+    # tick_list = ax.get_xticks()
+    # tick_list = [i if i<7 else i+1 for i in tick_list]
+    # ax.xaxis.set_major_locator(ticker.FixedLocator([0, 0.5, 1, 1.5, 2, 2.5]))
+    # for need_tot, dim_x in dim_xs:
+    #     if need_tot:
+    #         locator_list = [i if i<dim_x[0] else i+0.5 for i in list(ax.get_xticks())]
+    # x ticks (center of patch)coordinate: [0, 1, 2, ..., num_bar*1]
+    # print(ax.get_xticks())
+    locator_list = [
+        i if i < dim_xs[0][0] else i + interval for i in list(ax.get_xticks())
+    ]
+
+    ax.xaxis.set_major_locator(
+        ticker.FixedLocator(
+            np.asarray(locator_list) * x_ticks_scale + x_ticks_displacement
+        )
+    )
     # when use below set_xticks, then in multi_bar_compare(),
     # the "width" option should not include dim_x.
     # ax.set_xticks(np.linspace(-1, 7, len(row_sum)))
@@ -161,14 +229,14 @@ def bar_plot_settings(
         )
 
     # scale
-    # ax.autoscale()
-    # ax.set_autoscale_on(True)
+    ax.autoscale()
+    ax.set_autoscale_on(True)
 
     # figure settings
     # fig.tight_layout()
-    fig.autofmt_xdate()
-    if save_fig:
-        fig.savefig(save_fig)
+    # fig.autofmt_xdate()
+    # if save_fig:
+    #     fig.savefig(save_fig)
     return fig, ax
 
 
@@ -184,17 +252,37 @@ def set_ticklabels(labels: list, r_sum: int) -> List[str]:
     return tic_l
 
 
-def percent_df(p_df: pd.DataFrame) -> pd.DataFrame:
+def percent_df(df: pd.DataFrame) -> pd.DataFrame:
     df_dic = dict()
-    for label, row in p_df.iterrows():
+
+    for label, row in df.iterrows():
 
         row = np.asarray(row)
         new_row = row / row.sum()
         df_dic[label] = new_row
     new_df = pd.DataFrame.from_dict(df_dic)
-    col_name = [name for _, name in p_df.columns]
+    col_name = [name for _, name in df.columns]
     new_df.index = col_name
     return new_df.transpose()
+
+
+def percent_from_list_to_df(df: pd.DataFrame) -> pd.DataFrame:
+    df_list = list()
+
+    for _, row in df.iterrows():
+        row = np.asarray(row)
+        if row.sum() == 0:
+            new_row = row * 0
+        else:
+            new_row = row / row.sum()
+        df_list.append(new_row)
+    new_df = pd.DataFrame(df_list)
+    col_name = [name for _, name in df.columns]
+
+    new_df.index = df.index
+    new_df.columns = col_name
+
+    return new_df
 
 
 def compare_bar_plot(
@@ -239,10 +327,121 @@ def compare_bar_plot(
     return fig, ax
 
 
+def recast_multi_to_one(
+    filepath: str, col_xs: List[Tuple[str, bool, bool]], col_ys: Tuple[str, bool]
+) -> Tuple[List[Tuple[int, bool]], int, pd.DataFrame]:
+    col_y, y_no_answer = col_ys
+    p_dfs, dim_xs, dim_y = list(), list(), list()
+    for col_x, need_total, x_no_answer in col_xs:
+        p_df = prepare_df(
+            filepath,
+            col_x,
+            col_y,
+            need_total=need_total,
+            need_x_null=x_no_answer,
+            need_y_null=y_no_answer,
+        )
+        dim_xs.append((len(p_df.index), need_total))
+
+        p_dfs.append(p_df)
+    recast_df = pd.concat(p_dfs)
+    # print(recast_df)
+    dim_y = len(recast_df.columns)
+
+    return dim_xs, dim_y, recast_df
+
+
+def multi_bar_to_one_compare(
+    filepath: str,
+    col_xs: List[Tuple[str, bool, bool]],
+    col_ys: Tuple[str, bool],
+    save_figure: str = None,
+    give_title: str = None,
+    interval: float = 0.5,
+    legend_location: str = "upper center",
+    color: list = None,
+    fig_size: tuple = (10, 5),
+    x_ticks_displacement: float = 1,
+    x_ticks_scale: float = 0.5,
+) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
+    fig, ax = plt.subplots(figsize=fig_size)
+    dim_xs, dim_y, recast_df = recast_multi_to_one(filepath, col_xs, col_ys)
+
+    if color is not None and len(color) != dim_y:
+        raise Exception(
+            f"laushir, there need {dim_y} kinds of colors to make it as a color map list,\
+                 you dra only gives {len(color)} colors, na hwedron."
+        )
+    ax = percent_from_list_to_df(recast_df).plot.bar(
+        ax=ax, stacked=True, width=0.03 * fig_size[0], color=color
+    )
+    # _, need_tot, _ = col_xs
+    r_sum, ax = add_text_in_bar(
+        ax,
+        fig_size,
+        recast_df,
+        dim_xs,
+        interval=interval,
+        x_ticks_displacement=x_ticks_displacement,
+        x_ticks_scale=x_ticks_scale,
+    )
+
+    bar_plot_settings(
+        fig,
+        ax,
+        f_size=fig_size,
+        title=give_title,
+        # legend_loc=legend_location,
+        row_sum=r_sum,
+        dim_xs=dim_xs,
+        interval=interval,
+        x_ticks_displacement=x_ticks_displacement,
+        x_ticks_scale=x_ticks_scale,
+        # save_fig=save_figure)
+        # legend_col=int(len(p_df.columns))
+    )
+    # very good explain of how to share legend
+    # refer to:
+    # https://stackoverflow.com/questions/9834452/how-do-i-make-a-single-legend-for-many-subplots-with-matplotlib
+    anchor = (0.5, 0.82)
+    # dim_y = len(p_df.columns)
+    # tuple_labels = [ax.get_legend_handles_labels() for ax in axs]
+    # tuple_labels = ax.get_legend_handles_labels()
+    # handles, new_leg_labels = [sum(lol, []) for lol in zip(*tuple_labels)]
+    # new_leg_labels = list()
+    # for name in leg_labels:
+    #     new_leg_labels.append(name)
+    # print()
+    handles, leg_labels = ax.get_legend_handles_labels()
+    new_leg_labels = list()
+    for name in leg_labels:
+        # _, tu = name.strip("()").split(", ")
+        new_leg_labels.append(name)
+    fig.legend(
+        handles[0:dim_y],
+        new_leg_labels[0:dim_y],
+        ncol=dim_y,
+        bbox_to_anchor=anchor,
+        fontsize=fig_size[0] * 1.5,
+        loc=legend_location,
+        frameon=False,
+        labelspacing=0.1,
+        handlelength=1,
+        handletextpad=0.7,
+        columnspacing=1,
+        # prop={'legend.labelspacing':0.25}
+    )
+    fig.suptitle("she woa dra niaou", x=0.5, y=1, fontsize=fig_size[0] * 2)
+    fig.tight_layout(pad=1.2)
+    fig.autofmt_xdate()
+    fig.savefig(save_figure)
+    return fig, ax
+
+
 def multi_bar_compare(
     filepath: str,
-    col_xs: List[str],
-    col_y: str,
+    col_xs: List[Tuple[str, bool, bool]],
+    col_ys: Tuple[str, bool],
     save_figure: str = None,
     give_title: str = None,
     legend_location: str = "upper center",
@@ -260,7 +459,7 @@ def multi_bar_compare(
         fig, axs = plt.subplots(1, len(col_xs), figsize=fig_size)
     for i, col_x in enumerate(col_xs):
         # fig, axs[i] = compare_bar_plot(fig,axs[i],filepath,col_x,col_y,color,fig_size)
-        p_df = prepare_df(filepath, col_x, col_y)
+        p_df = prepare_df(filepath, col_x, col_ys)
         dim_x = len(p_df.index)
         if color is not None and len(color) != len(p_df.columns):
             raise Exception(
@@ -314,11 +513,12 @@ def multi_bar_compare(
 
 # final version I will remove it, keep it just for easy testing, else I have to find the test file and others.
 if __name__ == "__main__":
-    multi_bar_compare(
+    multi_bar_to_one_compare(
         "../data_set/test_Oct08.csv",
-        ["A7", "A00"],
-        "A6",  # save_figure='../test/tmp/multiple_compare_bar_plot.png',
-        give_title="lau shir, bai lee nar, ku tree zhe, drong",
+        [("B7", True, False), ("A00", True, False)],
+        ("A6", True),
+        save_figure="../playground/tmp/multi_to_one.png",
+        give_title="laushir, bai leener, kutree zhe. dron !",
         legend_location="upper center",
         color=[
             "royalblue",
