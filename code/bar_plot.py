@@ -19,7 +19,7 @@ def bar_plot_settings(
     legend_loc: str = None,
     legend_col: int = 2,
     save_fig: bool = False,
-    no_frame: bool = True,
+    no_frame: bool = False,
     row_sum: int = None,
 ) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
     """
@@ -109,8 +109,14 @@ def extract_data(file: str, col_name: str) -> pd.Series:
     return a dataframe which include bar plot data.
     """
     df = pd.read_csv(file)
-    ser = df.fillna("no_answer")
+    ser = df.fillna("No Answer")
     return ser[col_name]
+
+
+def extract_question_choice(xml_res_dict: dict, col_name: str) -> list:
+    question = xml_res_dict["questions"]
+    name_list = question["choices"]
+    return name_list
 
 
 def add_text_to_patch(
@@ -156,7 +162,7 @@ def bar_plot(
     color: str,
     display_noanswer: bool,
     save_fig: str,
-    f_size: tuple = (20, 6),
+    f_size: tuple = (12, 6),
     give_title: str = None,
     give_x_label: str = None,
     give_y_label: str = None,
@@ -168,7 +174,7 @@ def bar_plot(
     if display_noanswer:
         x = cnt.keys()
     else:
-        cnt.pop("no_answer")
+        cnt.pop("No Answer")
         x = cnt.keys()
     y = list(cnt.values())
     fig, ax = plt.subplots(figsize=f_size)
@@ -181,10 +187,15 @@ def bar_plot(
     return fig, ax
 
 
-"""
 # final version I will remove it, keep it just for testing else I have to find the test file and others.
-# if __name__=='__main__':
-#     ser = extract_data('../../../DataScience/Matplotlib/test_Oct08.csv', 'A3')
-#     bar_plot(ser, 'orang', display_noanswer=True, save_fig='./bar_img.png', give_title='title', give_y_label='y label')
-#     print(f'finished')
-# """
+if __name__ == "__main__":
+    ser = extract_data("../../../DataScience/Matplotlib/test_Oct08.csv", "A3")
+    bar_plot(
+        ser,
+        "orange",
+        display_noanswer=True,
+        save_fig="../playground/tmp/bar_img.png",
+        give_title="title",
+        give_y_label="y label",
+    )
+    print("finished")

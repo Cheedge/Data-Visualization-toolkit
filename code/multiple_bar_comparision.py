@@ -550,12 +550,13 @@ def multi_bar_compare(
 if __name__ == "__main__":
     multi_bar_to_one_compare(
         "../data_set/test_Oct08.csv",
-        [("B7", False, True), ("A00", False, False)],
+        # [("B7", False, True), ("A00", False, False)],
+        [("A7", False, True)],
         ("A6", True),
-        save_figure="../playground/tmp/multi_to_one_4.png",
+        save_figure="../playground/tmp/only_one1.png",
         give_title="laushir, bai leener, kutree zhe. dron !",
         legend_location="upper center",
-        set_location=[-0.5, 0.5, 2, 3.5, 4.5],
+        set_location=[1, 2, 3, 4, 5, 6, 7],
         color=[
             "royalblue",
             "steelblue",
