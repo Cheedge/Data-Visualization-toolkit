@@ -2,5 +2,6 @@ tmp/
 data_set/
 .ipynb_checkpoints/
 .python-version
-
+__pychche__/
+.gitignore
 
