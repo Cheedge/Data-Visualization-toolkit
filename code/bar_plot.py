@@ -205,13 +205,21 @@ def produce_xy(
     cnt["No Answer"] = count["No Answer"]
 
     if display_noanswer:
-        x = cnt.keys()
+        x = list(cnt.keys())
     else:
         cnt.pop("No Answer")
-        x = cnt.keys()
+        x = list(cnt.keys())
 
     y = list(cnt.values())
     return x, y
+
+
+def threshold_filter(x: list, y: list, threshold: float) -> Tuple[list]:
+    sum_y = sum(y)
+    new_x = [x[i] for i in range(len(y)) if y[i] / sum_y >= threshold]
+    new_y = [yi for yi in y if yi / sum_y >= threshold]
+
+    return new_x, new_y
 
 
 def bar_plot(
@@ -226,6 +234,7 @@ def bar_plot(
     give_x_label: str = None,
     give_y_label: str = None,
     replace_name_dict: dict = None,
+    threshold: float = 0.00,
 ) -> Tuple[mpl.figure.Figure, mpl.axes.Axes]:
     """
     plot single choice bar graph
@@ -236,6 +245,7 @@ def bar_plot(
         give_title = extract_title(structure_dict, col_name)
     x, y = produce_xy(ser, name_dict, display_noanswer, replace_name_dict)
     fig, ax = plt.subplots(figsize=f_size)
+    x, y = threshold_filter(x, y, threshold)
     ax.bar(x, y, color=fading_colors(len(y), color))
     add_text_to_patch(ax, font_size=f_size[0], values=y)
     plt.text(len(y) * 0.9, max(y) * 1.1, f"Total: {sum(y)}", size=f_size[0] * 1.5)
@@ -252,9 +262,9 @@ if __name__ == "__main__":
         csv_file_path="../../../DataScience/Matplotlib/test_Oct08.csv",
         col_name="C8",
         structure_dict=structure_dict,
-        color="orange",
+        color="pink",
         display_noanswer=True,
-        save_fig="../playground/tmp/bar_img2.png",
+        save_fig="../playground/tmp/bar_img3.png",
         replace_name_dict={
             "I don’t want to answer this question": "No Comment",
             "I don't want to answer this question": "No Comment",
@@ -264,5 +274,6 @@ if __name__ == "__main__":
         #   'Other gender representations:': 'Other'},\
         give_title="Holidays",
         give_y_label="DeGene",
+        threshold=0.1,
     )
     print(f"{'finished'}")
